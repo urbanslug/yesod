@@ -27,3 +27,8 @@ git clone --recursive http://github.com/yesodweb/yesod
 ```
 
 Each repository can be built with `stack build`.
+
+### For use with wai-devel.
+
+`cd yesod-bin && stack init && stack build`
+then read the README.md in yesod-bin/

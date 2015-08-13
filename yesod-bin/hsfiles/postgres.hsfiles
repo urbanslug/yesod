@@ -37,7 +37,6 @@ config/client_session_key.aes
 .hsenv*
 cabal-dev/
 .stack-work/
-yesod-devel/
 .cabal-sandbox
 cabal.sandbox.config
 .DS_Store
@@ -67,13 +66,16 @@ import Language.Haskell.TH.Syntax           (qLocation)
 import Network.Wai.Handler.Warp             (Settings, defaultSettings,
                                              defaultShouldDisplayException,
                                              runSettings, setHost,
-                                             setOnException, setPort, getPort)
+                                             setOnException, setPort, getPort
+                                             Port, HostPreference)
 import Network.Wai.Middleware.RequestLogger (Destination (Logger),
                                              IPAddrSource (..),
                                              OutputFormat (..), destination,
                                              mkRequestLogger, outputFormat)
 import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
                                              toLogStr)
+import Network.Socket
+import System.Environment (setEnv, unsetEnv)
 
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
@@ -170,7 +172,37 @@ getAppSettings = loadAppSettings [configSettingsYml] [] useEnv
 
 -- | main function for use by yesod devel
 develMain :: IO ()
-develMain = develMainHelper getApplicationDev
+develMain = develMainHelper' getApplicationDev
+
+develMainHelper' :: IO (Settings, Application) -> IO ()
+develMainHelper' getSettingsApp = do
+    (settings, app) <- getSettingsApp
+
+    _ <- unsetEnv "wai_port" >> setEnv "wai_port" "3001"
+    _ <- unsetEnv "wai_host" >> setEnv "wai_host" "127.0.0.1"
+
+    let settings'  = setPort (3001 :: Port) settings
+        settings'' = setHost ((read "127.0.0.1") :: HostPreference) settings'
+
+    sock <- createSocket
+
+    runSettingsSocket settings'' sock app
+
+    where -- | Create the socket that we will use to communicate with
+          -- localhost:3001 here.
+          createSocket :: IO Socket
+          createSocket = do
+
+            sock <- socket AF_INET Stream defaultProtocol
+
+            -- Tell the OS *not* to reserve the socket after your program exits.
+            setSocketOption sock ReuseAddr 1
+
+            -- Bind the socket to localhost:3000 and listen.
+            -- I wonder why I can't specify localhost instead of iNADDR_ANY
+            bindSocket sock (SockAddrInet 3001 iNADDR_ANY)
+            listen sock 2
+            return sock
 
 -- | The @main@ function for an executable running this site.
 appMain :: IO ()
@@ -862,14 +894,6 @@ modifyStoredIORef :: Store (IORef a) -> (a -> IO a) -> IO ()
 modifyStoredIORef store f = withStore store $ \ref -> do
     v <- readIORef ref
     f v >>= writeIORef ref
-
-{-# START_FILE app/devel.hs #-}
-{-# LANGUAGE PackageImports #-}
-import "PROJECTNAME" Application (develMain)
-import Prelude (IO)
-
-main :: IO ()
-main = develMain
 
 {-# START_FILE app/main.hs #-}
 import Prelude     (IO)

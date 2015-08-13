@@ -27,4 +27,4 @@ installing Yesod: http://www.yesodweb.com/page/quickstart
 
 If your system is already configured correctly, please run:
 
-    cd PROJECTNAME && stack build && stack exec -- yesod devel
+    cd PROJECTNAME && stack init && stack build && wai-devel
